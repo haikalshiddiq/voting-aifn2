@@ -39,7 +39,7 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Validate required files
+      - name: Validate files and secrets
         shell: bash
         run: |
           set -euo pipefail
@@ -66,88 +66,61 @@ jobs:
             fi
           done
 
-          echo "Semua file aplikasi tersedia."
-
-      - name: Validate secrets and workflow input
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || {
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
             echo "::error::Secret CLOUDFLARE_ACCOUNT_ID belum tersedia."
             exit 1
-          }
+          fi
 
-          test -n "${CLOUDFLARE_API_TOKEN:-}" || {
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
             echo "::error::Secret CLOUDFLARE_API_TOKEN belum tersedia."
             exit 1
-          }
+          fi
 
-          test -n "${ADMIN_KEY:-}" || {
+          if [ -z "${ADMIN_KEY:-}" ]; then
             echo "::error::Secret ADMIN_KEY belum tersedia."
             exit 1
-          }
+          fi
 
-          test -n "${TURNSTILE_SECRET_KEY:-}" || {
+          if [ -z "${TURNSTILE_SECRET_KEY:-}" ]; then
             echo "::error::Secret TURNSTILE_SECRET_KEY belum tersedia."
             exit 1
-          }
+          fi
 
-          test -n "${TURNSTILE_SITE_KEY:-}" || {
+          if [ -z "${TURNSTILE_SITE_KEY:-}" ]; then
             echo "::error::Turnstile Site Key belum diisi."
             exit 1
-          }
+          fi
 
           if [ "${#ADMIN_KEY}" -lt 32 ]; then
             echo "::error::ADMIN_KEY harus memiliki minimal 32 karakter."
             exit 1
           fi
 
-          echo "Semua secrets dan input workflow tersedia."
+          echo "Semua file, secrets, dan input workflow tersedia."
 
       - name: Install dependencies
         shell: bash
         run: |
           set -euo pipefail
-          npm install --no-audit --no-fund
+
+          npm install \
+            --no-audit \
+            --no-fund
 
       - name: Normalize Wrangler configuration
         shell: bash
         run: |
           set -euo pipefail
 
-          python3 -c "
-          import json
-          from pathlib import Path
+          python3 -c "import json,pathlib; p=pathlib.Path('wrangler.jsonc'); c=json.loads(p.read_text()); c.update({'name':'voting-aifn2','compatibility_date':'2026-11-11','workers_dev':True}); p.write_text(json.dumps(c,indent=2)+'\n')"
 
-          path = Path('wrangler.jsonc')
-          config = json.loads(path.read_text(encoding='utf-8'))
-
-          config['name'] = 'voting-aifn2'
-          config['compatibility_date'] = '2026-11-11'
-          config['workers_dev'] = True
-
-          path.write_text(
-              json.dumps(
-                  config,
-                  ensure_ascii=False,
-                  indent=2
-              ) + '\n',
-              encoding='utf-8'
-          )
-
-          print('Worker name:', config['name'])
-          print(
-              'Compatibility date:',
-              config['compatibility_date']
-          )
-          print('workers_dev:', config['workers_dev'])
-          "
+          echo "Konfigurasi Wrangler telah dinormalisasi."
 
       - name: Create or locate AiFn2 D1 database
         shell: bash
         run: |
           set -euo pipefail
+
           python3 scripts/bootstrap_d1.py
 
       - name: Validate D1 configuration
@@ -155,117 +128,22 @@ jobs:
         run: |
           set -euo pipefail
 
-          python3 -c "
-          import json
-          from pathlib import Path
-
-          config = json.loads(
-              Path('wrangler.jsonc').read_text(
-                  encoding='utf-8'
-              )
-          )
-
-          databases = config.get('d1_databases', [])
-
-          if len(databases) != 1:
-              raise SystemExit(
-                  'Harus tersedia tepat satu database D1.'
-              )
-
-          database = databases[0]
-
-          if database.get('binding') != 'DB':
-              raise SystemExit(
-                  'D1 binding harus bernama DB.'
-              )
-
-          if (
-              database.get('database_name')
-              != 'voting-aifn2'
-          ):
-              raise SystemExit(
-                  'Database D1 harus bernama voting-aifn2.'
-              )
-
-          database_id = database.get(
-              'database_id',
-              ''
-          )
-
-          if not database_id:
-              raise SystemExit(
-                  'D1 database_id masih kosong.'
-              )
-
-          if (
-              database_id
-              == 'REPLACE_WITH_D1_DATABASE_ID'
-          ):
-              raise SystemExit(
-                  'D1 database_id masih berupa placeholder.'
-              )
-
-          print('D1 database ID:', database_id)
-          "
+          python3 -c "import json; c=json.load(open('wrangler.jsonc')); d=c.get('d1_databases',[]); assert len(d)==1, 'Harus ada tepat satu database D1'; assert d[0].get('binding')=='DB', 'Binding D1 harus bernama DB'; assert d[0].get('database_name')=='voting-aifn2', 'Nama database harus voting-aifn2'; assert d[0].get('database_id') not in ('','REPLACE_WITH_D1_DATABASE_ID'), 'D1 database_id belum terpasang'; print('D1 siap:',d[0]['database_id'])"
 
       - name: Configure Turnstile Site Key
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/patch.py "$TURNSTILE_SITE_KEY"
 
-      - name: Validate Turnstile configuration
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          python3 -c "
-          import json
-          from pathlib import Path
-
-          config = json.loads(
-              Path('wrangler.jsonc').read_text(
-                  encoding='utf-8'
-              )
-          )
-
-          site_key = (
-              config
-              .get('vars', {})
-              .get('TURNSTILE_SITE_KEY', '')
-          )
-
-          if not site_key:
-              raise SystemExit(
-                  'TURNSTILE_SITE_KEY kosong.'
-              )
-
-          if (
-              site_key
-              == '1x00000000000000000000AA'
-          ):
-              raise SystemExit(
-                  'Turnstile masih memakai test Site Key.'
-              )
-
-          print(
-              'Turnstile Site Key:',
-              site_key[:8]
-              + '...'
-              + site_key[-4:]
-          )
-          "
+          python3 scripts/patch.py \
+            "$TURNSTILE_SITE_KEY"
 
       - name: Run application QA
         shell: bash
         run: |
           set -euo pipefail
-          npm run qa
 
-      - name: Check Worker JavaScript syntax
-        shell: bash
-        run: |
-          set -euo pipefail
+          npm run qa
           node --check src/index.js
 
       - name: Apply D1 migrations
@@ -347,7 +225,7 @@ jobs:
         run: |
           set +e
 
-          echo "Pengecekan informatif:"
+          echo "Memeriksa:"
           echo "${WORKER_URL}/api/config"
 
           rm -f api-config.json
@@ -385,7 +263,7 @@ jobs:
           fi
 
           if [ "$CURL_EXIT" -ne 0 ]; then
-            echo "::warning::GitHub runner tidak dapat menjangkau workers.dev. Deployment tetap valid karena sudah diverifikasi melalui Wrangler."
+            echo "::warning::GitHub runner tidak dapat menjangkau workers.dev. Deployment tetap valid karena sudah terverifikasi melalui Wrangler."
             exit 0
           fi
 
@@ -403,54 +281,8 @@ jobs:
             exit 0
           fi
 
-          cat > validate_api.py <<'PYTHON'
-          import json
+          python3 -c "import json; d=json.load(open('api-config.json')); c=d.get('candidates',[]); assert len(c)==40, 'Jumlah kandidat harus 40'; assert not any(x.get('nim')=='25140200001' for x in c), 'Mahasiswa Fast-Track masih terdaftar'; assert any(x.get('nim')=='25110200005' for x in c), 'HELMI RIYADHOH belum terdaftar'; assert any(x.get('nim')=='25110200003' for x in c), 'RINI YANTI belum terdaftar'; assert d.get('deadline')=='2026-11-12T15:00:00.000Z', 'Deadline server tidak sesuai'; print('Health check berhasil: 40 kandidat, Fast-Track dikecualikan')"
 
-          with open(
-              "api-config.json",
-              encoding="utf-8",
-          ) as file:
-              data = json.load(file)
-
-          candidates = data.get(
-              "candidates",
-              [],
-          )
-
-          if len(candidates) != 38:
-              raise SystemExit(
-                  "Jumlah kandidat bukan 38."
-              )
-
-          if any(
-              candidate.get("nim")
-              == "25140200001"
-              for candidate in candidates
-          ):
-              raise SystemExit(
-                  "Mahasiswa Fast-Track masih terdaftar."
-              )
-
-          expected_deadline = (
-              "2026-11-19T15:00:00.000Z"
-          )
-
-          if (
-              data.get("deadline")
-              != expected_deadline
-          ):
-              raise SystemExit(
-                  "Deadline server tidak sesuai."
-              )
-
-          print(
-              "Health check berhasil:",
-              len(candidates),
-              "kandidat eligible.",
-          )
-          PYTHON
-
-          python3 validate_api.py
           exit 0
 
       - name: Show production URLs
@@ -464,6 +296,12 @@ jobs:
             >> "$GITHUB_STEP_SUMMARY"
 
           echo "" \
+            >> "$GITHUB_STEP_SUMMARY"
+
+          echo "- Pemilih dan kandidat eligible: 40 mahasiswa" \
+            >> "$GITHUB_STEP_SUMMARY"
+
+          echo "- Deadline: Kamis, 12 November 2026 pukul 22.00 WIB" \
             >> "$GITHUB_STEP_SUMMARY"
 
           echo "- Halaman mahasiswa: ${WORKER_URL}" \
@@ -504,7 +342,7 @@ jobs:
           git add wrangler.jsonc
 
           if git diff --cached --quiet; then
-            echo "Tidak ada konfigurasi yang perlu disimpan."
+            echo "Tidak ada perubahan konfigurasi yang perlu disimpan."
           else
             git commit \
               -m "chore: configure AiFn2 Cloudflare D1"

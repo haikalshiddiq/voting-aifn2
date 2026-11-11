@@ -18,3 +18,9 @@ Halaman dapat dipasang melalui tombol `Pasang aplikasi` di browser yang mendukun
 ## URL
 - Pemilih: `https://voting-aifn2.hicall.workers.dev`
 - Admin: `https://voting-aifn2.hicall.workers.dev/admin.html`
+
+## Public participation and final results
+- Before deadline, `/api/public-status` exposes only names and masked NIMs of students who have not submitted a ballot. Redeem alone does not count as voted.
+- The public panel refreshes every 15 seconds.
+- After deadline, the same endpoint exposes final totals, percentages, participation, winner, or tie status.
+- Public results never expose voter-to-candidate mappings. That audit remains admin-only.

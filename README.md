@@ -1,8 +1,8 @@
 # Voting Ketua Kelas AiFn2 PWA
 
 Target: https://voting-aifn2.hicall.workers.dev
-Eligible: 38 mahasiswa. RUDI HARTANTO (25140200001, Fast-Track) dikecualikan sebagai pemilih dan kandidat.
-Deadline server: Kamis, 19 November 2026 pukul 22.00 WIB (15.00 UTC).
+Eligible: 40 mahasiswa. RUDI HARTANTO (25140200001, Fast-Track) dikecualikan sebagai pemilih dan kandidat.
+Deadline server: Kamis, 12 November 2026 pukul 22.00 WIB (15.00 UTC).
 
 ## Repository baru
 1. Buat repository GitHub baru, misalnya `voting-aifn2`.
@@ -24,3 +24,11 @@ Halaman dapat dipasang melalui tombol `Pasang aplikasi` di browser yang mendukun
 - The public panel refreshes every 15 seconds.
 - After deadline, the same endpoint exposes final totals, percentages, participation, winner, or tie status.
 - Public results never expose voter-to-candidate mappings. That audit remains admin-only.
+
+
+## Revisi deadline
+Deadline final diubah menjadi Kamis, 12 November 2026 pukul 22.00 WIB (15.00 UTC). Cache PWA dinaikkan agar browser mengambil versi terbaru.
+
+
+## Roster terbaru
+Roster voting berisi 40 mahasiswa eligible. HELMI RIYADHOH dan RINI YANTI sudah ditambahkan. RUDI HARTANTO (Fast-Track) dikecualikan. Deadline tetap Kamis, 12 November 2026 pukul 22.00 WIB.

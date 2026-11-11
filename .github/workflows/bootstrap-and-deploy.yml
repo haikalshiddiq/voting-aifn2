@@ -39,7 +39,7 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Validate files and secrets
+      - name: Validate required files
         shell: bash
         run: |
           set -euo pipefail
@@ -65,6 +65,13 @@ jobs:
               exit 1
             fi
           done
+
+          echo "Semua file aplikasi tersedia."
+
+      - name: Validate secrets and workflow input
+        shell: bash
+        run: |
+          set -euo pipefail
 
           if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
             echo "::error::Secret CLOUDFLARE_ACCOUNT_ID belum tersedia."
@@ -96,7 +103,7 @@ jobs:
             exit 1
           fi
 
-          echo "Semua file, secrets, dan input workflow tersedia."
+          echo "Semua secrets dan input workflow tersedia."
 
       - name: Install dependencies
         shell: bash
@@ -128,7 +135,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          python3 -c "import json; c=json.load(open('wrangler.jsonc')); d=c.get('d1_databases',[]); assert len(d)==1, 'Harus ada tepat satu database D1'; assert d[0].get('binding')=='DB', 'Binding D1 harus bernama DB'; assert d[0].get('database_name')=='voting-aifn2', 'Nama database harus voting-aifn2'; assert d[0].get('database_id') not in ('','REPLACE_WITH_D1_DATABASE_ID'), 'D1 database_id belum terpasang'; print('D1 siap:',d[0]['database_id'])"
+          python3 -c "import json; c=json.load(open('wrangler.jsonc')); d=c.get('d1_databases',[]); assert len(d)==1, 'Harus tersedia tepat satu database D1'; assert d[0].get('binding')=='DB', 'Binding D1 harus bernama DB'; assert d[0].get('database_name')=='voting-aifn2', 'Database harus bernama voting-aifn2'; assert d[0].get('database_id') not in ('','REPLACE_WITH_D1_DATABASE_ID'), 'D1 database_id belum terpasang'; print('D1 siap:',d[0]['database_id'])"
 
       - name: Configure Turnstile Site Key
         shell: bash
@@ -137,6 +144,13 @@ jobs:
 
           python3 scripts/patch.py \
             "$TURNSTILE_SITE_KEY"
+
+      - name: Validate AiFn2 roster and deadline
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 -c "import json,pathlib; e=json.load(open('src/eligible.json')); assert len(e)==40, 'Roster harus berisi tepat 40 mahasiswa'; assert len({x['nim'] for x in e})==40, 'Terdapat NIM duplikat'; assert not any(x['nim']=='25140200001' for x in e), 'RUDI HARTANTO masih masuk roster'; assert any(x['nim']=='25110200005' for x in e), 'HELMI RIYADHOH belum masuk roster'; assert any(x['nim']=='25110200003' for x in e), 'RINI YANTI belum masuk roster'; w=pathlib.Path('src/index.js').read_text(); assert '2026-11-12T15:00:00.000Z' in w, 'Deadline Worker tidak sesuai'; print('Roster dan deadline valid: 40 mahasiswa eligible')"
 
       - name: Run application QA
         shell: bash
@@ -178,8 +192,15 @@ jobs:
         run: |
           set -euo pipefail
 
+          rm -f wrangler-deploy.log
+
           npx wrangler deploy 2>&1 |
             tee wrangler-deploy.log
+
+          if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+            echo "::error::wrangler deploy gagal."
+            exit 1
+          fi
 
           WORKER_URL=$(
             grep -Eo \
@@ -191,6 +212,7 @@ jobs:
 
           if [ -z "${WORKER_URL:-}" ]; then
             WORKER_URL="https://voting-aifn2.hicall.workers.dev"
+            echo "::warning::URL tidak ditemukan di log Wrangler. Menggunakan URL produksi yang dikonfigurasi."
           fi
 
           WORKER_URL="${WORKER_URL%/}"
@@ -199,23 +221,31 @@ jobs:
             >> "$GITHUB_OUTPUT"
 
           echo ""
-          echo "Production Worker URL:"
+          echo "Worker berhasil di-deploy."
+          echo "Production URL:"
           echo "$WORKER_URL"
 
-      - name: Verify deployment through Wrangler
+      - name: Record deployment evidence
         shell: bash
         run: |
           set -euo pipefail
 
-          npx wrangler deployments list 2>&1 |
-            tee wrangler-deployments.log
-
-          if [ ! -s wrangler-deployments.log ]; then
-            echo "::error::Wrangler tidak mengembalikan daftar deployment."
+          if [ ! -s wrangler-deploy.log ]; then
+            echo "::error::Log deployment tidak tersedia."
             exit 1
           fi
 
-          echo "Deployment terdeteksi melalui Wrangler."
+          echo "Ringkasan output Wrangler:"
+          tail -n 30 wrangler-deploy.log
+
+          if grep -Eqi \
+            "deployed|uploaded|current version|version id|workers.dev" \
+            wrangler-deploy.log; then
+
+            echo "Output keberhasilan deployment ditemukan."
+          else
+            echo "::warning::Tidak menemukan frasa deployment standar pada log, tetapi perintah wrangler deploy selesai dengan exit code 0."
+          fi
 
       - name: Optional workers.dev health check
         continue-on-error: true
@@ -225,7 +255,7 @@ jobs:
         run: |
           set +e
 
-          echo "Memeriksa:"
+          echo "Memeriksa endpoint:"
           echo "${WORKER_URL}/api/config"
 
           rm -f api-config.json
@@ -263,7 +293,7 @@ jobs:
           fi
 
           if [ "$CURL_EXIT" -ne 0 ]; then
-            echo "::warning::GitHub runner tidak dapat menjangkau workers.dev. Deployment tetap valid karena sudah terverifikasi melalui Wrangler."
+            echo "::warning::GitHub runner tidak dapat menjangkau workers.dev. Deployment tetap berhasil berdasarkan exit code wrangler deploy."
             exit 0
           fi
 
@@ -273,15 +303,15 @@ jobs:
               api-config.json \
               2>/dev/null; then
 
-              echo "::warning::Cloudflare workers.dev mengembalikan error 1042 sebelum request mencapai Worker. Deployment tetap dianggap berhasil."
+              echo "::warning::Cloudflare workers.dev mengembalikan error 1042 sebelum request mencapai Worker. Deployment tidak digagalkan."
               exit 0
             fi
 
-            echo "::warning::Endpoint mengembalikan HTTP $HTTP_CODE. Periksa URL melalui browser."
+            echo "::warning::Endpoint mengembalikan HTTP $HTTP_CODE. Kemungkinan route masih dalam propagasi. Deployment tidak digagalkan."
             exit 0
           fi
 
-          python3 -c "import json; d=json.load(open('api-config.json')); c=d.get('candidates',[]); assert len(c)==40, 'Jumlah kandidat harus 40'; assert not any(x.get('nim')=='25140200001' for x in c), 'Mahasiswa Fast-Track masih terdaftar'; assert any(x.get('nim')=='25110200005' for x in c), 'HELMI RIYADHOH belum terdaftar'; assert any(x.get('nim')=='25110200003' for x in c), 'RINI YANTI belum terdaftar'; assert d.get('deadline')=='2026-11-12T15:00:00.000Z', 'Deadline server tidak sesuai'; print('Health check berhasil: 40 kandidat, Fast-Track dikecualikan')"
+          python3 -c "import json; d=json.load(open('api-config.json')); c=d.get('candidates',[]); assert len(c)==40, 'Jumlah kandidat harus tepat 40'; assert len({x.get('nim') for x in c})==40, 'Terdapat NIM kandidat duplikat'; assert not any(x.get('nim')=='25140200001' for x in c), 'Mahasiswa Fast-Track masih terdaftar'; assert any(x.get('nim')=='25110200005' for x in c), 'HELMI RIYADHOH belum terdaftar'; assert any(x.get('nim')=='25110200003' for x in c), 'RINI YANTI belum terdaftar'; assert d.get('deadline')=='2026-11-12T15:00:00.000Z', 'Deadline server tidak sesuai'; print('Health check berhasil: 40 kandidat, Fast-Track dikecualikan')"
 
           exit 0
 
@@ -299,6 +329,9 @@ jobs:
             >> "$GITHUB_STEP_SUMMARY"
 
           echo "- Pemilih dan kandidat eligible: 40 mahasiswa" \
+            >> "$GITHUB_STEP_SUMMARY"
+
+          echo "- Fast-Track dikecualikan: RUDI HARTANTO, 25140200001" \
             >> "$GITHUB_STEP_SUMMARY"
 
           echo "- Deadline: Kamis, 12 November 2026 pukul 22.00 WIB" \

@@ -1,0 +1,17 @@
+{
+  "name": "Voting Ketua Kelas AiFn2",
+  "short_name": "Voting AiFn2",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f8fc",
+  "theme_color": "#132a4f",
+  "description": "Voting Ketua Kelas Artificial Intelligence in Finance AiFn2",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

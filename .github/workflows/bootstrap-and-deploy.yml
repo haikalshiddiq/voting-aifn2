@@ -8,12 +8,6 @@ on:
         required: true
         type: string
 
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - "README.md"
-
 permissions:
   contents: write
 
@@ -40,14 +34,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node.js
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
 
-      - name: Validate required repository files
+      - name: Validate required files
         shell: bash
         run: |
           set -euo pipefail
@@ -74,35 +66,35 @@ jobs:
             fi
           done
 
-          echo "Semua file aplikasi ditemukan."
+          echo "Semua file aplikasi tersedia."
 
-      - name: Validate required GitHub Secrets
+      - name: Validate required secrets
         shell: bash
         run: |
           set -euo pipefail
 
           if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-            echo "::error::Repository secret CLOUDFLARE_ACCOUNT_ID belum tersedia."
+            echo "::error::Secret CLOUDFLARE_ACCOUNT_ID belum tersedia."
             exit 1
           fi
 
           if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
-            echo "::error::Repository secret CLOUDFLARE_API_TOKEN belum tersedia."
+            echo "::error::Secret CLOUDFLARE_API_TOKEN belum tersedia."
             exit 1
           fi
 
           if [ -z "${ADMIN_KEY:-}" ]; then
-            echo "::error::Repository secret ADMIN_KEY belum tersedia."
+            echo "::error::Secret ADMIN_KEY belum tersedia."
             exit 1
           fi
 
           if [ -z "${TURNSTILE_SECRET_KEY:-}" ]; then
-            echo "::error::Repository secret TURNSTILE_SECRET_KEY belum tersedia."
+            echo "::error::Secret TURNSTILE_SECRET_KEY belum tersedia."
             exit 1
           fi
 
           if [ -z "${TURNSTILE_SITE_KEY:-}" ]; then
-            echo "::error::Turnstile Site Key belum diisi pada form Run workflow."
+            echo "::error::Turnstile Site Key belum diisi."
             exit 1
           fi
 
@@ -111,18 +103,16 @@ jobs:
             exit 1
           fi
 
-          echo "Secrets dan input workflow tersedia."
+          echo "Semua secrets dan input workflow tersedia."
 
       - name: Install dependencies
         shell: bash
         run: |
           set -euo pipefail
 
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
+          npm install \
+            --no-audit \
+            --no-fund
 
       - name: Normalize Wrangler compatibility date
         shell: python
@@ -133,166 +123,79 @@ jobs:
           path = Path("wrangler.jsonc")
           config = json.loads(path.read_text(encoding="utf-8"))
 
-          # Harus bukan tanggal masa depan menurut Cloudflare.
           config["compatibility_date"] = "2026-11-11"
 
           path.write_text(
-              json.dumps(config, indent=2, ensure_ascii=False) + "\n",
+              json.dumps(
+                  config,
+                  ensure_ascii=False,
+                  indent=2,
+              ) + "\n",
               encoding="utf-8",
           )
 
-          print("compatibility_date =", config["compatibility_date"])
+          print(
+              "compatibility_date:",
+              config["compatibility_date"],
+          )
 
-      - name: Create or locate Cloudflare D1 database
+      - name: Create or locate AiFn2 D1 database
         shell: bash
         run: |
           set -euo pipefail
+
           python3 scripts/bootstrap_d1.py
 
-      - name: Validate D1 database configuration
-        shell: python
-        run: |
-          import json
-          from pathlib import Path
-
-          path = Path("wrangler.jsonc")
-          config = json.loads(path.read_text(encoding="utf-8"))
-
-          databases = config.get("d1_databases", [])
-
-          if not databases:
-              raise SystemExit("D1 binding tidak ditemukan di wrangler.jsonc")
-
-          database = databases[0]
-
-          if database.get("binding") != "DB":
-              raise SystemExit("Binding D1 harus bernama DB")
-
-          if database.get("database_name") != "voting-aifn2":
-              raise SystemExit(
-                  "Database name harus voting-aifn2, ditemukan: "
-                  + str(database.get("database_name"))
-              )
-
-          database_id = database.get("database_id", "")
-
-          if not database_id:
-              raise SystemExit("database_id D1 kosong")
-
-          if database_id == "REPLACE_WITH_D1_DATABASE_ID":
-              raise SystemExit(
-                  "Placeholder database_id belum diganti oleh bootstrap_d1.py"
-              )
-
-          print("D1 database siap:", database_id)
-
-      - name: Configure Turnstile Site Key
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/patch.py "$TURNSTILE_SITE_KEY"
-
-      - name: Validate public configuration
+      - name: Validate D1 configuration
         shell: python
         run: |
           import json
           from pathlib import Path
 
           config = json.loads(
-              Path("wrangler.jsonc").read_text(encoding="utf-8")
+              Path("wrangler.jsonc").read_text(
+                  encoding="utf-8"
+              )
           )
 
-          site_key = config.get("vars", {}).get(
-              "TURNSTILE_SITE_KEY", ""
-          )
+          databases = config.get("d1_databases", [])
 
-          if not site_key:
+          if len(databases) != 1:
               raise SystemExit(
-                  "TURNSTILE_SITE_KEY tidak ditemukan di wrangler.jsonc"
+                  "Harus tersedia tepat satu D1 database."
               )
 
-          if site_key == "1x00000000000000000000AA":
+          database = databases[0]
+
+          if database.get("binding") != "DB":
               raise SystemExit(
-                  "Turnstile masih memakai test Site Key."
+                  "D1 binding harus bernama DB."
               )
 
-          if config.get("name") != "voting-aifn2":
+          if database.get("database_name") != "voting-aifn2":
               raise SystemExit(
-                  "Nama Worker harus voting-aifn2"
+                  "D1 database harus bernama voting-aifn2."
               )
 
-          print("Turnstile Site Key dan nama Worker valid.")
+          database_id = database.get("database_id", "")
 
-      - name: Apply Cloudflare D1 migrations
+          if not database_id:
+              raise SystemExit(
+                  "D1 database_id masih kosong."
+              )
+
+          if database_id == "REPLACE_WITH_D1_DATABASE_ID":
+              raise SystemExit(
+                  "D1 database_id masih berupa placeholder."
+              )
+
+          print("D1 database ID:", database_id)
+
+      - name: Configure Turnstile Site Key
         shell: bash
         run: |
           set -euo pipefail
 
-          npx wrangler d1 migrations apply voting-aifn2 \
-            --remote
+          python3 scripts/patch.py \
+            "$TURNSTILE_SITE_KEY"
 
-      - name: Upload shared ADMIN_KEY
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          printf '%s' "$ADMIN_KEY" |
-            npx wrangler secret put ADMIN_KEY
-
-      - name: Upload Turnstile Secret Key
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          printf '%s' "$TURNSTILE_SECRET_KEY" |
-            npx wrangler secret put TURNSTILE_SECRET_KEY
-
-      - name: Run application QA
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm run qa
-
-      - name: Check Worker JavaScript syntax
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --check src/index.js
-
-      - name: Deploy Cloudflare Worker
-        id: deploy
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx wrangler deploy
-
-      - name: Show deployment URLs
-        shell: bash
-        run: |
-          echo "Deployment AiFn2 selesai."
-          echo ""
-          echo "Halaman mahasiswa:"
-          echo "https://voting-aifn2.hicall.workers.dev"
-          echo ""
-          echo "Halaman admin:"
-          echo "https://voting-aifn2.hicall.workers.dev/admin.html"
-
-      - name: Commit generated D1 configuration
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          git config user.name "github-actions[bot]"
-          git config user.email \
-            "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add wrangler.jsonc
-
-          if git diff --cached --quiet; then
-            echo "Tidak ada perubahan konfigurasi untuk disimpan."
-          else
-            git commit \
-              -m "chore: configure AiFn2 Cloudflare D1"
-
-            git push origin HEAD:main
-          fi

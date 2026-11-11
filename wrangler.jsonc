@@ -1,0 +1,9 @@
+{
+  "name": "voting-aifn2",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-11",
+  "workers_dev": true,
+  "assets": {"directory":"./public","binding":"ASSETS","run_worker_first":["/api/*"]},
+  "d1_databases": [{"binding":"DB","database_name":"voting-aifn2","database_id":"REPLACE_WITH_D1_DATABASE_ID","migrations_dir":"migrations"}],
+  "vars": {"TURNSTILE_SITE_KEY":"1x00000000000000000000AA"}
+}

@@ -1,0 +1,13 @@
+{
+  "name": "voting-aifn2-pwa",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "qa": "node scripts/qa.mjs",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.159.0"
+  }
+}

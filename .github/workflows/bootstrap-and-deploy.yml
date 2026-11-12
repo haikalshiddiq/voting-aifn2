@@ -103,7 +103,7 @@ jobs:
             exit 1
           fi
 
-          echo "Semua secrets dan input tersedia."
+          echo "Semua secrets dan input workflow tersedia."
 
       - name: Install dependencies
         shell: bash
@@ -159,12 +159,12 @@ jobs:
 
           python3 -c "from pathlib import Path; w=Path('src/index.js').read_text(encoding='utf-8'); assert '2026-11-12T15:00:00.000Z' in w, 'Deadline Worker tidak sesuai'; print('Deadline valid: Kamis, 12 November 2026 pukul 22.00 WIB')"
 
-      - name: Validate final voting fix
+      - name: Validate final voting and logout fix
         shell: bash
         run: |
           set -euo pipefail
 
-          python3 -c "from pathlib import Path; w=Path('src/index.js').read_text(encoding='utf-8'); h=Path('public/index.html').read_text(encoding='utf-8'); sw=Path('public/sw.js').read_text(encoding='utf-8'); vote=w[w.index(\"u.pathname==='/api/vote'\"):w.index(\"u.pathname==='/api/admin'\")]; assert 'await TS(' not in vote, 'Endpoint vote masih meminta Turnstile kedua'; assert 'TTL=900000' in w, 'TTL sesi belum 15 menit'; assert 'id=\"sendVote\"' in h, 'Tombol Kirim suara tidak ditemukan'; assert \"body:JSON.stringify({token:T,candidateNim:nim})\" in h, 'Payload vote belum diperbaiki'; assert 'aifn2-v6-vote-submit-stable' in sw, 'Versi cache PWA belum diperbarui'; print('Final voting fix valid')"
+          python3 -c "from pathlib import Path; w=Path('src/index.js').read_text(encoding='utf-8'); h=Path('public/index.html').read_text(encoding='utf-8'); sw=Path('public/sw.js').read_text(encoding='utf-8'); vote=w[w.index(\"u.pathname==='/api/vote'\"):w.index(\"u.pathname==='/api/admin'\")]; assert 'await TS(' not in vote, 'Endpoint vote masih meminta Turnstile kedua'; assert 'TTL=900000' in w, 'TTL sesi belum 15 menit'; assert 'id=\"sendVote\"' in h, 'Tombol Kirim suara tidak ditemukan'; assert \"body:JSON.stringify({token:T,candidateNim:nim})\" in h, 'Payload vote belum diperbaiki'; assert \"document.getElementById('logout').addEventListener('click',window.doLogout)\" in h, 'Binding tombol logout belum diperbaiki'; assert \"logout.addEventListener('click',window.doLogout)\" not in h, 'Binding logout lama masih ditemukan'; assert 'aifn2-v7-logout-binding-fix' in sw, 'Versi cache PWA belum diperbarui'; print('Final voting dan logout fix valid')"
 
       - name: Run application QA
         shell: bash
@@ -285,7 +285,7 @@ jobs:
               --header "Accept: application/json" \
               --header "Cache-Control: no-cache" \
               --user-agent \
-              "Voting-AiFn2-Health-Check/2.0" \
+              "Voting-AiFn2-Health-Check/2.1" \
               "${WORKER_URL}/api/config"
           )
 
@@ -345,6 +345,9 @@ jobs:
             >> "$GITHUB_STEP_SUMMARY"
 
           echo "- Deadline: Kamis, 12 November 2026 pukul 22.00 WIB" \
+            >> "$GITHUB_STEP_SUMMARY"
+
+          echo "- Perbaikan PWA: aifn2-v7-logout-binding-fix" \
             >> "$GITHUB_STEP_SUMMARY"
 
           echo "- Halaman mahasiswa: ${WORKER_URL}" \

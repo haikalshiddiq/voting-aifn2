@@ -40,3 +40,7 @@ Tombol Kirim suara tidak lagi terkunci permanen jika callback Turnstile terlamba
 
 ## Perbaikan final voting
 Turnstile hanya dijalankan pada validasi NIM. Endpoint vote memakai ballot session yang sudah diverifikasi, sehingga tidak ada widget Turnstile kedua yang dapat memblokir tombol Kirim suara. TTL sesi aktif diperpanjang dari 2 menjadi 15 menit dan tetap diperbarui heartbeat setiap 30 detik.
+
+
+## Perbaikan binding tombol logout
+Referensi elemen logout kini selalu diambil eksplisit dengan document.getElementById('logout'), tidak lagi mengandalkan global ID browser yang bertabrakan dengan fungsi logout().

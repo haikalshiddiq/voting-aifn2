@@ -36,3 +36,7 @@ Roster voting berisi 40 mahasiswa eligible. HELMI RIYADHOH dan RINI YANTI sudah 
 
 ## Perbaikan pengiriman suara
 Tombol Kirim suara tidak lagi terkunci permanen jika callback Turnstile terlambat. Saat diklik, aplikasi membaca token langsung dari widget, menampilkan instruksi jika verifikasi belum selesai, mencegah klik ganda saat request berjalan, dan mengaktifkan kembali tombol bila request gagal.
+
+
+## Perbaikan final voting
+Turnstile hanya dijalankan pada validasi NIM. Endpoint vote memakai ballot session yang sudah diverifikasi, sehingga tidak ada widget Turnstile kedua yang dapat memblokir tombol Kirim suara. TTL sesi aktif diperpanjang dari 2 menjadi 15 menit dan tetap diperbarui heartbeat setiap 30 detik.

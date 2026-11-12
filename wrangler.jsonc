@@ -3,22 +3,7 @@
   "main": "src/index.js",
   "compatibility_date": "2026-11-11",
   "workers_dev": true,
-  "assets": {
-    "directory": "./public",
-    "binding": "ASSETS",
-    "run_worker_first": [
-      "/api/*"
-    ]
-  },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "voting-aifn2",
-      "database_id": "c857be1c-6d4a-4d63-a295-e93529540043",
-      "migrations_dir": "migrations"
-    }
-  ],
-  "vars": {
-    "TURNSTILE_SITE_KEY":"0x4AAAAAAF8-MSHvyKt9jDJS"
-  }
+  "assets": {"directory":"./public","binding":"ASSETS","run_worker_first":["/api/*"]},
+  "d1_databases": [{"binding":"DB","database_name":"voting-aifn2","database_id":"REPLACE_WITH_D1_DATABASE_ID","migrations_dir":"migrations"}],
+  "vars": {"TURNSTILE_SITE_KEY":"1x00000000000000000000AA"}
 }

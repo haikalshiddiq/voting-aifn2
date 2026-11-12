@@ -32,3 +32,7 @@ Deadline final diubah menjadi Kamis, 12 November 2026 pukul 22.00 WIB (15.00 UTC
 
 ## Roster terbaru
 Roster voting berisi 40 mahasiswa eligible. HELMI RIYADHOH dan RINI YANTI sudah ditambahkan. RUDI HARTANTO (Fast-Track) dikecualikan. Deadline tetap Kamis, 12 November 2026 pukul 22.00 WIB.
+
+
+## Perbaikan pengiriman suara
+Tombol Kirim suara tidak lagi terkunci permanen jika callback Turnstile terlambat. Saat diklik, aplikasi membaca token langsung dari widget, menampilkan instruksi jika verifikasi belum selesai, mencegah klik ganda saat request berjalan, dan mengaktifkan kembali tombol bila request gagal.
